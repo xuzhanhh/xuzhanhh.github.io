@@ -1,3 +1,3 @@
 # personal blog
 
-setting up travis
+setting up travis ~~~
