@@ -1,8 +1,7 @@
 ---
-
 title: Inside Fiber
 
-date: '2018-12-13'
+date: '2018-12-22'
 
 spoiler: 当我们在讨论Fiber时，我们在讨论什么。
 
@@ -182,4 +181,86 @@ function completeWork(workInProgress) {
 ​	从实现中可以看出，performUnitOfWork和completeUnitOfWork主要用于迭代目的，而主要活动则在beginWork和completeWork函数中进行。 在本系列的以下文章中，我们将了解ClickCounter组件和span节点会发生什么，因为React步入beginWork和completeWork函数。
 
 ### commit 阶段
+
+​	这个阶段从[completeRoot](https://github.com/facebook/react/blob/95a313ec0b957f71798a69d8e83408f40e76765b/packages/react-reconciler/src/ReactFiberScheduler.js#L2306)开始， 他是react更新DOM和调用前后生命周期的方法。当react进入commit阶段时，会有两颗树和effects list。第一颗树(current)代表当前的渲染状态。在`render`阶段会有一颗alternate tree被称作`finishedWork`或`workInProgress`表示即将渲染到屏幕上的状态。这个alternate tree通过child和sibling指针相连，与current tree相似。
+
+​	然后，还有一个effects list--来自`finishedWork`树的节点子集并通过nextEffect指针链接。要记住effect list是执行render函数的结果。渲染的重点是确定需要插入、更新或删除那些节点，以及哪些组件需要调用其生命周期方法。这就是effect list作用。他正是commit阶段迭代的节点集。
+
+> 为了debug，current tree可以通过fiber root的current字段获取。finishedWork tree可以通过current tree中的`HostFiber`节点的alternate字段获取
+
+​	在commit阶段执行的主要函数是[commitRoot](https://github.com/facebook/react/blob/95a313ec0b957f71798a69d8e83408f40e76765b/packages/react-reconciler/src/ReactFiberScheduler.js#L523)，他的主要流程如下：
+
+- 对有`Snapshot`effect的节点调用`getSnapshotBeforeUpdate`
+- 对有`Deletion`effect的节点调用`cWU`
+- 执行所有的DOM插入更新和删除
+- 把finished tree转为current tree
+- 对有`Placement`effect的节点调用`cDM`
+- 对有`Update`effect的节点调用`cDU`
+
+​	在调用变动前的`getSnapshotBeforeUpdate`方法之后，react会在一棵树中提交所有side-effects。会分成两个pass，一是执行所有DOM(host)插入，更新，删除和ref卸载。然后react会将`finishedWork` tree分配给`FiberRoot`并将`workInProgress`tree标记为`current`tree。这些会在commit阶段的第一次pass后执行。所以在`cWU`阶段的current还是旧的，但是`cDM/cDU`阶段current就是`finishedWork`tree了。
+
+```javascript
+function commitRoot(root, finishedWork) {
+    commitBeforeMutationLifecycles()
+    commitAllHostEffects();
+    root.current = finishedWork;
+    commitAllLifeCycles();
+}
+```
+
+​	每一个子函数都实现了一个循环去遍历effects list并检查effects的类型，当他找到想要的，就会应用它。
+
+#### 变化前的生命周期
+
+​	例如，迭代effects list并检查检查节点是否有`Snapshot`effect的代码：
+
+```javascript
+//ReactFiberCommitWork.js
+function commitBeforeMutationLifecycles() {
+    while (nextEffect !== null) {
+        const effectTag = nextEffect.effectTag;
+        if (effectTag & Snapshot) {
+            const current = nextEffect.alternate;
+            commitBeforeMutationLifeCycles(current, nextEffect);
+        }
+        nextEffect = nextEffect.nextEffect;
+    }
+}
+```
+
+对于一个class组件，这个effect意味着调用`getSnapshotBeforeUpdate`生命周期函数
+
+#### DOM更新
+
+[commitAllHostEffects](https://github.com/facebook/react/blob/95a313ec0b957f71798a69d8e83408f40e76765b/packages/react-reconciler/src/ReactFiberScheduler.js#L376)是react执行DOM更新的函数。这个函数定义了需要被执行的类型并解析：
+
+```javascript
+function commitAllHostEffects() {
+    switch (primaryEffectTag) {
+        case Placement: {
+            commitPlacement(nextEffect);
+            ...
+        }
+        case PlacementAndUpdate: {
+            commitPlacement(nextEffect);
+            commitWork(current, nextEffect);
+            ...
+        }
+        case Update: {
+            commitWork(current, nextEffect);
+            ...
+        }
+        case Deletion: {
+            commitDeletion(nextEffect);
+            ...
+        }
+    }
+}
+```
+
+有意思的是React是在`commitDeletion`函数中作为删除的一部分调用`cWU`的
+
+#### 变化后的生命周期
+
+[commitAllLifecycles](https://github.com/facebook/react/blob/95a313ec0b957f71798a69d8e83408f40e76765b/packages/react-reconciler/src/ReactFiberScheduler.js#L465)是react调用所有剩下的生命周期方法如`cDU`和`cDM`
 
