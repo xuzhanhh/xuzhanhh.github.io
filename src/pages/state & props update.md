@@ -1,6 +1,6 @@
 ---
 title: state & props update
-date: '2018-12-22'
+date: '2018-12-23'
 spoiler: 深入react内部
 ---
 
@@ -208,3 +208,50 @@ export const Update = 0b00000000100;
 
 > 如果您急于自己学习细节，查看[reconcileChildrenArray](https://github.com/facebook/react/blob/95a313ec0b957f71798a69d8e83408f40e76765b/packages/react-reconciler/src/ReactChildFiber.js#L732)函数因为我们这个应用的render方法返回了一个react元素的数组。
 
+我们需要理解两个重要的概念：
+
+1. 当react执行child reconciliation时，他创建或更新render方法返回的reac元素的fiber节点。**finishClassComponent**函数返回当前fiber节点第一个孩子的引用。它会分配到**nextUnitOfWork**并在稍后的work loop中处理。
+
+2. react更新children的props作为parent工作的一部分。为此，它使用来自render方法返回的React元素的数据。例如，这是**span**在react reconcile之前的fiber节点
+
+   ```javascript
+   {
+       stateNode: new HTMLSpanElement,
+       type: "span",
+       key: "2",
+       memoizedProps: {children: 0},
+       pendingProps: {children: 0},
+       ...
+   }
+   ```
+
+   可以看到，**memoizedProps**和**pendingProps**中的**children**是**0**，这里是span元素被render后返回的react元素
+
+   ```javascript
+   {
+       $$typeof: Symbol(react.element)
+       key: "2"
+       props: {children: 1}
+       ref: null
+       type: "span"
+   }
+   ```
+
+   可以看到，fiber节点中的props和被返回的react元素有不同，在[**createWorkInProgress**](https://github.com/facebook/react/blob/769b1f270e1251d9dbdce0fcbd9e92e502d059b8/packages/react-reconciler/src/ReactFiber.js#L326)函数中创建alternate fiber节点，**react会从react元素中有更新的属性中复制到fiber节点**。所以，当react结束**ClickCouter**组件的child reconciliation，**span**的fiber节点会更新**pendingProps**属性。
+
+   ```javascript
+   {
+       stateNode: new HTMLSpanElement,
+       type: "span",
+       key: "2",
+       memoizedProps: {children: 0},
+       pendingProps: {children: 1},
+       ...
+   }
+   ```
+
+   当react执行span fiber节点工作时，会将pendingProps复制到**memoizedProps**中并添加一个effects去更新DOM。
+
+   
+
+   这就是render阶段react在**ClickCounter** fiber节点上的工作。因为button是ClickCounter组件的第一个孩子，他会被分配到**nextUnitOfWork**，且他没什么卵事要干，所以react会移动到他的兄弟节点--span。
