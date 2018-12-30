@@ -255,3 +255,114 @@ export const Update = 0b00000000100;
    
 
    这就是render阶段react在**ClickCounter** fiber节点上的工作。因为button是ClickCounter组件的第一个孩子，他会被分配到**nextUnitOfWork**，且他没什么卵事要干，所以react会移动到他的兄弟节点--span。
+
+
+
+
+
+
+
+
+
+## start from here
+
+​	commit阶段是react更新DOM和调用cDU生命周期。为了实现，react会遍历render阶段构建的effects list并应用他们。
+
+```javascript
+{ type: ClickCounter, effectTag: 5 }
+{ type: 'span', effectTag: 4 }
+```
+
+​	ClickCouter的effect tag是5（二进制是101），定义了**Update**，对于class组件来说基本上是转换**componentDidUpdate**，二进制的最后一位被设置意味着这个fiber节点在**render**阶段的所有工作已经完成。
+
+​	span的effect tag是4（二进制100），定义了 update，对于host组件来说是DOM更新。在span元素的情况下，react会更新元素的**textContent**。
+
+#### Applying effects
+
+​	让我们看看react是如何应用这些effects的，[**commitRoot**](https://github.com/facebook/react/blob/95a313ec0b957f71798a69d8e83408f40e76765b/packages/react-reconciler/src/ReactFiberScheduler.js#L523)函数，包含了三个子函数：
+
+```javascript
+function commitRoot(root, finishedWork) {
+    commitBeforeMutationLifecycles()
+    commitAllHostEffects();
+    root.current = finishedWork;
+    commitAllLifeCycles();
+}
+```
+
+ 	每一个子函数都会遍历effecys list并检查effects的类型。当它找到与函数目的相关的效果时，它会应用它。在我们的例子中，commitRoot会调用**ClickCounter**的**cDU**和更新**span**元素的文本。
+
+​	第一个函数[commitBeforeMutationLifeCycles](https://github.com/facebook/react/blob/fefa1269e2a67fa5ef0992d5cc1d6114b7948b7e/packages/react-reconciler/src/ReactFiberCommitWork.js#L183)会查找[**Snapshot**](https://github.com/facebook/react/blob/b87aabdfe1b7461e7331abb3601d9e6bb27544bc/packages/shared/ReactSideEffectTags.js#L25) effect并调用**getSnapshotBeforeUpdate**方法。不过我们的**ClickCouter**组件没有实现这个方法，react不会在**render**阶段中添加这个effect，所以在我们的例子中，这个函数不起作用。
+
+### DOM updates
+
+​	下一步，react会执行[**commitAllHostEffects**](https://github.com/facebook/react/blob/95a313ec0b957f71798a69d8e83408f40e76765b/packages/react-reconciler/src/ReactFiberScheduler.js#L376)函数，在这个函数中React会将**span**元素的文本从0改变到1，而ClickCounter组件则不受任何影响因为class组件对应的节点没有任何DOM更新。
+
+​	该函数的要点是它选择正确的效果类型并应用相应的操作。在我们的例子中，我们需要更新span元素的文本，所以我们在这里采用**Update**分支：
+
+```javascript
+function updateHostEffects() {
+    switch (primaryEffectTag) {
+      case Placement: {...}
+      case PlacementAndUpdate: {...}
+      case Update:
+        {
+          var current = nextEffect.alternate;
+          commitWork(current, nextEffect);
+          break;
+        }
+      case Deletion: {...}
+    }
+}
+```
+
+
+
+​	继续执行**commitWork**，react会执行[**updateDOMProperties**](https://github.com/facebook/react/blob/8a8d973d3cc5623676a84f87af66ef9259c3937c/packages/react-dom/src/client/ReactDOMComponent.js#L326)函数，他将在render阶段添加的updateQueue应用到fiber节点上，并更新**span**元素的**textContent**属性。
+
+```javascript
+function updateDOMProperties(domElement, updatePayload, ...) {
+  for (let i = 0; i < updatePayload.length; i += 2) {
+    const propKey = updatePayload[i];
+    const propValue = updatePayload[i + 1];
+    if (propKey === STYLE) { ...} 
+    else if (propKey === DANGEROUSLY_SET_INNER_HTML) {...} 
+    else if (propKey === CHILDREN) {
+      setTextContent(domElement, propValue);
+    } else {...}
+  }
+}
+```
+
+​	当DOM更新被执行后，react将**finishedWork**树分配到**HostRoot**：
+
+```javascript
+root.current = finishedWork;
+```
+
+
+
+### Calling post mutation lifecycle hooks
+
+​	剩下的最后一个函数是[**commitAllLifecycles**](https://github.com/facebook/react/blob/d5e1bf07d086e4fc1998653331adecddcd0f5274/packages/react-reconciler/src/ReactFiberScheduler.js#L479)。在这里react会调用更新后的生命周期。在render阶段中，react添加**Update** effect到**ClickCounter**组件中。这是**commitAllLifecycles**查找并调用的其中一个周期。
+
+```javascript
+function commitAllLifeCycles(finishedRoot, ...) {
+    while (nextEffect !== null) {
+        const effectTag = nextEffect.effectTag;
+
+        if (effectTag & (Update | Callback)) {
+            const current = nextEffect.alternate;
+            commitLifeCycles(finishedRoot, current, nextEffect, ...);
+        }
+        
+        if (effectTag & Ref) {
+            commitAttachRef(nextEffect);
+        }
+        
+        nextEffect = nextEffect.nextEffect;
+    }
+}
+```
+
+​	在这个函数中，react也会调用第一次被渲染的组件的**cDM**
