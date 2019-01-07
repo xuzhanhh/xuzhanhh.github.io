@@ -1,6 +1,6 @@
 ---
 title: state & props update
-date: '2018-12-23'
+date: '2018-01-07'
 spoiler: 深入react内部
 ---
 
@@ -43,6 +43,8 @@ class ClickCounter extends React.Component {
 
 * 更新`span`元素的`textContent`属性
 * 调用`cDU`
+
+## render阶段
 
 ### Scheduling updates（安排更新）
 
@@ -260,11 +262,114 @@ export const Update = 0b00000000100;
 
 
 
+### Processing updates for the Span fiber
 
+与**ClickCounter**相似，从[beginWork](https://github.com/facebook/react/blob/cbbc2b6c4d0d8519145560bd8183ecde55168b12/packages/react-reconciler/src/ReactFiberBeginWork.js#L1489)函数开始。因为**span**节点是**HostComponent**类型，所以：
 
+````javascript
+function beginWork(current$$1, workInProgress, ...) {
+    ...
+    switch (workInProgress.tag) {
+        case FunctionalComponent: {...}
+        case ClassComponent: {...}
+        case HostComponent:
+          return updateHostComponent(current, workInProgress, ...);
+        case ...
+}
+````
 
+在[updateHostComponent](https://github.com/facebook/react/blob/cbbc2b6c4d0d8519145560bd8183ecde55168b12/packages/react-reconciler/src/ReactFiberBeginWork.js#L686)结束。可以与class组件调用的**updateClassComponent**对比。对于函数式组件是**updateFunctionComponent**。你可以在[**ReactFiberBeginWork.js**](https://github.com/facebook/react/blob/1034e26fe5e42ba07492a736da7bdf5bf2108bc6/packages/react-reconciler/src/ReactFiberBeginWork.js)中找到所有这些函数。
 
-## start from here
+### Reconciling children for the span fiber
+
+在我们的例子中，span节点的**updateHostComponent**中没有特别重要的事情发生。
+
+### Completing work for the Span Fiber node
+
+当**beginWork**结束后，会进入**completeWork**。不过在这之前，react需要更新span fiber节点上的**memoizedProps**，你可能还记得当**ClickCounter**上reconciling children时，react更新了span fiber节点的**pendingProps**
+
+```javascript
+//这是之前的
+{
+    stateNode: new HTMLSpanElement,
+    type: "span",
+    key: "2",
+    memoizedProps: {children: 0},
+    pendingProps: {children: 1},
+    ...
+}
+```
+
+当**span**的fiber**beginWork**完成后，react更新pendingProps以匹配memoizedProps
+
+```javascript
+function performUnitOfWork(workInProgress) {
+    ...
+    next = beginWork(current$$1, workInProgress, nextRenderExpirationTime);
+    workInProgress.memoizedProps = workInProgress.pendingProps;
+    ...
+}
+```
+
+然后它调用completeWork函数，它基本上是一个类似于我们在beginWork中看到的大转换语句
+
+```javascript
+
+function completeWork(current, workInProgress, ...) {
+    ...
+    switch (workInProgress.tag) {
+        case FunctionComponent: {...}
+        case ClassComponent: {...}
+        case HostComponent: {
+            ...
+            updateHostComponent(current, workInProgress, ...);
+        }
+        case ...
+    }
+}
+```
+
+由于我们的span Fiber节点是HostComponent，因此它运行[**updateHostComponent**](https://github.com/facebook/react/blob/cbbc2b6c4d0d8519145560bd8183ecde55168b12/packages/react-reconciler/src/ReactFiberBeginWork.js#L686)函数。在这个函数中，React基本上执行以下操作：
+
+* 准备DOM更新
+* 将这些更新放到span fiber节点的updateQueue
+* 将这些effect应用到更新DOM上
+
+在执行这些操作之前，span Fiber节点如下所示：
+
+```javascript
+{
+    stateNode: new HTMLSpanElement,
+    type: "span",
+    effectTag: 0
+    updateQueue: null
+    ...
+}
+```
+
+当工作完成时，它看起来像这样：
+
+```javascript
+{
+    stateNode: new HTMLSpanElement,
+    type: "span",
+    effectTag: 4,
+    updateQueue: ["children", "1"],
+    ...
+}
+```
+
+​	注意effectTag和updateQueue字段的区别。它不再是0，它的值是4.在二进制中，这是100，这意味着第三位被设置，这是**update** side-effect的标志位。这是react需要在接下来的commit阶段对这个节点仅需的工作。**updateQueue**字段保存将用于更新的有效payload。 
+
+​	当react处理完**ClickCounter**和他的孩子，render阶段就结束了。它现在可以将完成的alternate tree分配给FiberRoot上的finishedWork属性。这是需要刷新到屏幕的新树。它可以在渲染阶段后立即处理，也可以在浏览器给出React时间后再处理。
+
+### Effects list
+
+​	在我们的例子中，因为span节点和ClickCounter组件有side effects，react会将span的fiber节点连接到HostFiber的firstEffect属性。react会在[**compliteUnitOfWork**](https://github.com/facebook/react/blob/d5e1bf07d086e4fc1998653331adecddcd0f5274/packages/react-reconciler/src/ReactFiberScheduler.js#L999)函数构建effects list，以下是具有更新span节点和ClickCounter上的钩子效果的fiber tree：
+
+![](http://pjpqjxkf6.bkt.clouddn.com/1_TRmFSeuOuWlY3HXh86cvDA.png)
+
+## commit阶段
 
 ​	commit阶段是react更新DOM和调用cDU生命周期。为了实现，react会遍历render阶段构建的effects list并应用他们。
 
@@ -277,7 +382,7 @@ export const Update = 0b00000000100;
 
 ​	span的effect tag是4（二进制100），定义了 update，对于host组件来说是DOM更新。在span元素的情况下，react会更新元素的**textContent**。
 
-#### Applying effects
+### Applying effects
 
 ​	让我们看看react是如何应用这些effects的，[**commitRoot**](https://github.com/facebook/react/blob/95a313ec0b957f71798a69d8e83408f40e76765b/packages/react-reconciler/src/ReactFiberScheduler.js#L523)函数，包含了三个子函数：
 
