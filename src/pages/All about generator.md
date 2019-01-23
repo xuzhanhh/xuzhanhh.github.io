@@ -1,7 +1,7 @@
 ---
 title: All about generator
-date: '2018-01-23'
-spoiler: 重新学习
+date: '2019-01-23'
+spoiler: 重新学习javaScript异步
 ---
 
 ## co的基本实现
