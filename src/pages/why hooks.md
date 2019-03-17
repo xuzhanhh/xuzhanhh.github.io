@@ -1,18 +1,24 @@
-# why hooks（一）
-
-从hooks切入，深入了解React编程模型
+---
+title: why hooks（一）
+date: '2019-03-17'
+spoiler: 从hooks切入，深入了解React编程模型
+---
 
 ## 前言
 
-​	简单说下为什么React选择函数式组件，主要是class组件比较冗余、生命周期函数写法不友好，functional组件更符合React编程思想。更具体的可以拜读dan大神的blog:[传送门](https://overreacted.io/how-are-function-components-different-from-classes/)。其中**Function components capture the rendered values**这句十分精辟的道出函数式组件的优势和.
+​	简单说下为什么React选择函数式组件，主要是class组件比较冗余、生命周期函数写法不友好，骚写法多，functional组件更符合React编程思想等等等。更具体的可以拜读dan大神的blog:[传送门](https://overreacted.io/how-are-function-components-different-from-classes/)。其中**Function components capture the rendered values**这句十分精辟的道出函数式组件的优势。
 
-## useState 在React中是怎么实现的
+​	但是在16.7之前react的函数式组件十分羸弱，基本只能作用于纯展示组件，主要因为缺少state和生命周期。本人曾经在hooks出来前负责过纯函数式的react项目，所有状态处理都必须在reducer中进行，所有副作用都在saga中执行，可以说是十分艰辛的经历了。在hooks出来后我在公司的一个小中台项目中使用，落地效果不错，代码量显著减少的同时提升了代码的可读性。因为通过custom hooks可以更好地剥离代码结构，不会像以前类组件那样在cDU等生命周期堆了一大堆逻辑，在命令式代码和声明式代码中有一个良性的边界。
+
+## useState在React中是怎么实现的
 
 > Hooks take some getting used to — and especially at the boundary of imperative and declarative code.
 
-如果对hooks不太了解的可以先看看这篇文章:[前情提要](https://medium.com/@ryardley/react-hooks-not-magic-just-arrays-cd4f1857236e)，对hooks实现有个具体了解，下面开始分析代码。
+​	如果对hooks不太了解的可以先看看这篇文章:[前情提要](https://medium.com/@ryardley/react-hooks-not-magic-just-arrays-cd4f1857236e)，对hooks实现有个具体了解。这篇文章很清晰的介绍了hooks的原理，但是仅停留最基本的useState。不过我对useEffect，useRef等钩子的实现比较好奇，所以开始啃起了源码，下面我会结合源码介绍useState的原理。
 
 ### hook的结构
+
+首先的是hooks的结构，hooks是挂载在组件Fiber结点上me的
 
 ```javascript
 //hook的结构
