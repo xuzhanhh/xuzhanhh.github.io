@@ -148,3 +148,7 @@ pre[data-line] {
   float: left;
   min-width: 100%;
 }
+
+body {
+  font-family: Menlo, Monaco, 'Courier New', monospace;
+}

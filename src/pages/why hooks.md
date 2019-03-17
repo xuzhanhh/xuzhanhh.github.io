@@ -18,7 +18,7 @@ spoiler: 从hooks切入，深入了解React编程模型
 
 ### hook的结构
 
-首先的是hooks的结构，hooks是挂载在组件Fiber结点上me的
+首先的是hooks的结构，hooks是挂载在组件Fiber结点上memoizedState的，关于Fiber结点可以看看我的另一篇：[传送门](https://xuzhanhh.com/Inside%20Fiber/)
 
 ```javascript
 //hook的结构
@@ -30,6 +30,8 @@ export type Hook = {
   next: Hook | null, //链表
 };
 ```
+
+### mountState
 
 ```javascript
 function mountState<S>(
