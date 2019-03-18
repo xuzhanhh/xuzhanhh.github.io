@@ -150,5 +150,14 @@ pre[data-line] {
 }
 
 body {
-  font-family: Menlo, Monaco, 'Courier New', monospace;
+  font-family: PingFang SC,-apple-system,Arial,Microsoft YaHei,Microsoft JhengHei,Helvetica Neue,sans-serif!important;
+}
+h4 {
+  font-family: PingFang SC,-apple-system,Arial,Microsoft YaHei,Microsoft JhengHei,Helvetica Neue,sans-serif!important;
+}
+h3 {
+  font-family: PingFang SC,-apple-system,Arial,Microsoft YaHei,Microsoft JhengHei,Helvetica Neue,sans-serif!important;
+}
+h2 {
+  font-family: PingFang SC,-apple-system,Arial,Microsoft YaHei,Microsoft JhengHei,Helvetica Neue,sans-serif!important;
 }

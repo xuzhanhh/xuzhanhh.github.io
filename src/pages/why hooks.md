@@ -66,7 +66,7 @@ return children;
 
 ### useState构建时流程
 
-#### mountState
+**mountState**
 
 在HooksDispatcherOnMount中，useState调用的是下面的mountState，作用是创建一个新的hook并使用默认值初始化并绑定其触发器，因为useState底层是useReducer，所以数组第二个值返回的是dispatch。
 
@@ -103,7 +103,7 @@ function mountState<S>(
 }
 ```
 
-#### mountWorkInProgressHook
+**mountWorkInProgressHook**
 
 这个函数是mountState时调用的构建hook的方法，在初始化完毕后会连接到当前hook.next（如果有的话）
 
@@ -233,7 +233,7 @@ function dispatchAction<S, A>(
 
 ### useState更新时流程
 
-#### updateReducer
+**updateReducer**
 
 ​	因为useState底层是useReducer，所以在更新时的流程(即重渲染组件后)是调用updateReducer的。
 
