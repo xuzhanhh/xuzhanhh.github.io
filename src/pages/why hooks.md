@@ -140,19 +140,19 @@ setData('second')
 setData('third')
 ```
 
-![image-20190317151730512](/images/image-20190317151730512.png)
+![image-20190317151730512](./images/image-20190317151730512.png)
 
 在第一次setData后， hooks的结构如上图
 
-![image-20190317152006773](/images/image-20190317152006773.png)
+![image-20190317152006773](./images/image-20190317152006773.png)
 
 在第二次setData后， hooks的结构如上图
 
-![image-20190317152401946](/images/image-20190317152401946.png)
+![image-20190317152401946](./images/image-20190317152401946.png)
 
 在第三次setData后， hooks的结构如上图
 
-![image-20190318114449227](/images/image-20190318114449227.png)
+![image-20190318114449227](./images/image-20190318114449227.png)
 
 在正常情况下，是不会在dispatcher中触发reducer而是将action存入update中在updateState中再执行，但是如果在react没有重渲染需求的前提下是会提前计算state即eagerState。作为性能优化的一环。
 
