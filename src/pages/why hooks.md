@@ -14,7 +14,7 @@ spoiler: 从hooks切入，深入了解React编程模型
 
 > Hooks take some getting used to — and especially at the boundary of imperative and declarative code.
 
-​	如果对hooks不太了解的可以先看看这篇文章:[前情提要](https://medium.com/@ryardley/react-hooks-not-magic-just-arrays-cd4f1857236e)，十分简明的介绍了hooks的核心原理，但是我对useEffect，useRef等钩子的实现比较好奇，所以开始啃起了源码，下面我会结合源码介绍useState的原理。
+​	如果对hooks不太了解的可以先看看这篇文章:[前情提要](https://medium.com/@ryardley/react-hooks-not-magic-just-arrays-cd4f1857236e)，十分简明的介绍了hooks的核心原理，但是我对useEffect，useRef等钩子的实现比较好奇，所以开始啃起了源码，下面我会结合源码介绍useState的原理。useState具体逻辑分成三部分：mountState，dispatch， updateState
 
 ### hook的结构
 
@@ -140,17 +140,19 @@ setData('second')
 setData('third')
 ```
 
-![image-20190317151730512](/Users/xuzhanhong/xuzhanhh.github.io/src/pages/image-20190317151730512.png)
+![image-20190317151730512](./pages/image-20190317151730512.png)
 
 在第一次setData后， hooks的结构如上图
 
-![image-20190317152006773](/Users/xuzhanhong/xuzhanhh.github.io/src/pages/image-20190317152006773.png)
+![image-20190317152006773](./pages/image-20190317152006773.png)
 
 在第二次setData后， hooks的结构如上图
 
-![image-20190317152401946](/Users/xuzhanhong/xuzhanhh.github.io/src/pages/image-20190317152401946.png)
+![image-20190317152401946](./pages/image-20190317152401946.png)
 
-在第三次setData后， hooks的结构如上图，具体代码如下所示。
+在第三次setData后， hooks的结构如上图
+
+![image-20190318114449227](./pages/image-20190318114449227.png)
 
 在正常情况下，是不会在dispatcher中触发reducer而是将action存入update中在updateState中再执行，但是如果在react没有重渲染需求的前提下是会提前计算state即eagerState。作为性能优化的一环。
 
@@ -231,6 +233,8 @@ function dispatchAction<S, A>(
 
 ### useState更新时流程
 
+#### updateReducer
+
 ​	因为useState底层是useReducer，所以在更新时的流程(即重渲染组件后)是调用updateReducer的。
 
 ```typescript
@@ -273,9 +277,7 @@ function updateReducer<S, I, A>(
   let first;
   if (baseUpdate !== null) {
     if (last !== null) {
-      // For the first update, the queue is a circular linked list where
-      // `queue.last.next = queue.first`. Once the first update commits, and
-      // the `baseUpdate` is no longer empty, we can unravel the list.
+      // 第一次更新时，队列是一个自圆queue.last.next = queue.first。当第一次update提交后，baseUpdate不再为空即可跳出队列
       last.next = null;
     }
     first = baseUpdate.next;
@@ -292,25 +294,23 @@ function updateReducer<S, I, A>(
     do {
       const updateExpirationTime = update.expirationTime;
       if (updateExpirationTime < renderExpirationTime) {
-        // Priority is insufficient. Skip this update. If this is the first
-        // skipped update, the previous update/state is the new base
-        // update/state.
+        // 优先级不足，跳过这次更新，如果这是第一次跳过更新，上一个update/state是newBaseupdate/state
         if (!didSkip) {
           didSkip = true;
           newBaseUpdate = prevUpdate;
           newBaseState = newState;
         }
-        // Update the remaining priority in the queue.
+        // 更新优先级
         if (updateExpirationTime > remainingExpirationTime) {
           remainingExpirationTime = updateExpirationTime;
         }
       } else {
-        // Process this update.
+        // 处理更新
         if (update.eagerReducer === reducer) {
-          // If this update was processed eagerly, and its reducer matches the
-          // current reducer, we can use the eagerly computed state.
+          // 如果更新被提前处理了且reducer跟当前reducer匹配，可以复用eagerState
           newState = ((update.eagerState: any): S);
         } else {
+          // 循环调用reducer
           const action = update.action;
           newState = reducer(newState, action);
         }
@@ -324,16 +324,13 @@ function updateReducer<S, I, A>(
       newBaseState = newState;
     }
 
-    // Mark that the fiber performed work, but only if the new state is
-    // different from the current state.
+    // 只有在前后state变了才会标记
     if (!is(newState, hook.memoizedState)) {
       markWorkInProgressReceivedUpdate();
     }
-
     hook.memoizedState = newState;
     hook.baseUpdate = newBaseUpdate;
     hook.baseState = newBaseState;
-
     queue.lastRenderedState = newState;
   }
 
@@ -344,5 +341,14 @@ function updateReducer<S, I, A>(
 
 
 
+```javascript
+export function markWorkInProgressReceivedUpdate() {
+  didReceiveUpdate = true;
+}
+```
 
 
+
+## 后记
+
+​	作为系列的第一篇文章，我选择了最常用的hooks开始，抛开提前计算及与react-reconciler的互动，整个流程是十分清晰易懂的。mount的时候构建钩子，触发dispatch时按序插入update。updateState的时候再按序触发reducer。可以说就是一个简单的redux。但是作为系列的开篇我认为知识量已经达到要求了xd
