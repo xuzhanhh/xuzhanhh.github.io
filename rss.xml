@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0"><channel><title><![CDATA[酱香型猫砂盆]]></title><description><![CDATA[Personal blog by Dan Abramov. I explain with words and code.]]></description><link>https://overreacted.io</link><generator>RSS for Node</generator><lastBuildDate>Wed, 20 Mar 2019 13:09:48 GMT</lastBuildDate><item><title><![CDATA[why hooks(2) — useEffect是怎么跑起来的]]></title><description><![CDATA[前言 ​		在 上一篇文章 中，我们梳理了useState的实现逻辑，得出是如果不考虑额外的优化逻辑，useState与fiber节点唯一的联系就是hooks队列是挂在fiber上的memoizedState，当React…]]></description><link>https://overreacted.io/why hooks(2)/</link><guid isPermaLink="false">https://overreacted.io/why hooks(2)/</guid><pubDate>Fri, 22 Mar 2019 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;前言&lt;/h2&gt;
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0"><channel><title><![CDATA[酱香型猫砂盆]]></title><description><![CDATA[Personal blog by Dan Abramov. I explain with words and code.]]></description><link>https://overreacted.io</link><generator>RSS for Node</generator><lastBuildDate>Wed, 20 Mar 2019 13:16:38 GMT</lastBuildDate><item><title><![CDATA[why hooks(2) — useEffect是怎么跑起来的]]></title><description><![CDATA[前言 ​		在 上一篇文章 中，我们梳理了useState的实现逻辑，得出是如果不考虑额外的优化逻辑，useState与fiber节点唯一的联系就是hooks队列是挂在fiber上的memoizedState，当React…]]></description><link>https://overreacted.io/why hooks(2)/</link><guid isPermaLink="false">https://overreacted.io/why hooks(2)/</guid><pubDate>Fri, 22 Mar 2019 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;前言&lt;/h2&gt;
 &lt;p&gt;​		在&lt;a href=&quot;https://xuzhanhh.com/why%20hooks/&quot;&gt;上一篇文章&lt;/a&gt;中，我们梳理了useState的实现逻辑，得出是如果不考虑额外的优化逻辑，useState与fiber节点唯一的联系就是hooks队列是挂在fiber上的memoizedState，当React执行到当前函数式组件时会将其按序取出并更新。那么这一次我们来到了useEffect，这次的hook是与react-reconciler有很强的联系的，所以我们可以通过这个hooks打开react-reconciler的大门。&lt;/p&gt;
 &lt;h2&gt;mountEffect &amp;#x26; mountLayoutEffect&lt;/h2&gt;
 &lt;p&gt;同样地，根据触发时间不同useEffect也分为两个func-mountEffect和updateEffect&lt;/p&gt;
@@ -127,7 +127,7 @@
   position&lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; absolute&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
 &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
 &lt;p&gt;得出的结果如下，子节点是被压缩到最小宽度&lt;/p&gt;
-&lt;p&gt;&lt;img src=&quot;./images/image-20190320003513604.png&quot; alt=&quot;image-20190320003513604&quot;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;/images/image-20190320003513604.png&quot; alt=&quot;image-20190320003513604&quot;&gt;&lt;/p&gt;
 &lt;p&gt;经过google得出以下结论&lt;/p&gt;
 &lt;blockquote&gt;
 &lt;p&gt;Because they are already nested under position: absolute; parent i.e .container and since no width is assigned, it will take the minimal width and hence&lt;/p&gt;
@@ -143,11 +143,11 @@
           删除后需点击「发布」才能生效哦～请问是否确定要删除？
         &lt;/span&gt;&lt;span class=&quot;token tag&quot;&gt;&lt;span class=&quot;token tag&quot;&gt;&lt;span class=&quot;token punctuation&quot;&gt;&amp;lt;/&lt;/span&gt;div&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;&gt;&lt;/span&gt;&lt;/span&gt;&lt;span class=&quot;token plain-text&quot;&gt;
       &lt;/span&gt;&lt;span class=&quot;token tag&quot;&gt;&lt;span class=&quot;token tag&quot;&gt;&lt;span class=&quot;token punctuation&quot;&gt;&amp;lt;/&lt;/span&gt;div&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;&gt;&lt;/span&gt;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
-&lt;p&gt;&lt;img src=&quot;./images/image-20190320003441607.png&quot; alt=&quot;image-20190320003441607&quot;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;/images/image-20190320003441607.png&quot; alt=&quot;image-20190320003441607&quot;&gt;&lt;/p&gt;
 &lt;p&gt;发现这个父容器的宽真的被撑开了，所以嵌套父容器的absolute子容器也有默认的宽度了，子容器里的内容的宽也能随着父容器的宽变化而变化&lt;/p&gt;
 &lt;h2&gt;结论&lt;/h2&gt;</content:encoded></item><item><title><![CDATA[使用位操作快速实现互斥选项]]></title><description><![CDATA[前言 ​	产品需求选择器实现如下效果，即某一行选中了某一个数值后那么其余行该选项就不可以选中了，这种就是很明显的标志位操作了，一般用字符串，对象什么的也可以解决。就是选中时在字符串中加入该value，然后在遍历渲染 时用正则match…]]></description><link>https://overreacted.io/使用位操作快速实现互斥选项/</link><guid isPermaLink="false">https://overreacted.io/使用位操作快速实现互斥选项/</guid><pubDate>Wed, 20 Mar 2019 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;前言&lt;/h2&gt;
 &lt;p&gt;​	产品需求选择器实现如下效果，即某一行选中了某一个数值后那么其余行该选项就不可以选中了，这种就是很明显的标志位操作了，一般用字符串，对象什么的也可以解决。就是选中时在字符串中加入该value，然后在遍历渲染&lt;Option&gt;时用正则match一下判断是否该渲染即可。&lt;/p&gt;
-&lt;p&gt;&lt;img src=&quot;./images/image-20190320202815576.png&quot; alt=&quot;image-20190320202815576&quot;&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;/images/image-20190320202815576.png&quot; alt=&quot;image-20190320202815576&quot;&gt;&lt;/p&gt;
 &lt;h2&gt;位操作逻辑&lt;/h2&gt;
 &lt;p&gt; 以下逻辑仅为本人&lt;strong&gt;快速实现业务逻辑&lt;/strong&gt;，没怎么经过拓展和优化代码的。如果有更好的实现方案欢迎大佬指导！&lt;/p&gt;
 &lt;h3&gt;定义tag&lt;/h3&gt;
