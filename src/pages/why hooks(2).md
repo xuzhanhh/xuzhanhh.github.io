@@ -137,8 +137,181 @@ function updateEffectImpl(fiberEffectTag, hookEffectTag, create, deps): void {
 }
 ```
 
-
-
-## 跳出hooks
-
 至此，useEffect在ReactFiberHooks.js里的逻辑已经没有了，剩下我们将跑入react-reconciler中。观察useEffect剩下的逻辑是怎么执行的。
+
+## render阶段
+
+class组件的具体流程可以看我这篇[blog](https://xuzhanhh.com/Inside%20Fiber/)，下面开始分析functional组件，我会将设计一个分界点在renderWithHooks，这样我认为流程看起来会更加清晰
+
+### 在renderWithHooks之前
+
+#### renderRoot & workloop
+
+reconcile通常从`HostRoot`fiber结点，并通过[renderRoot](https://github.com/facebook/react/blob/95a313ec0b957f71798a69d8e83408f40e76765b/packages/react-reconciler/src/ReactFiberScheduler.js#L1132)方法开始。但是，React会快速跳过已经处理过的fiber节点知道他找到一个未完成工作的结点。举个🌰，如果你在组件树的深层调用`setState`，React仍然会从Root节点开始reconcile不过会快速跳过节点直到遇到调用setState的组件。在renderRoot中，所有的fiber节点都会在[workloop](https://github.com/facebook/react/blob/f765f022534958bcf49120bf23bc1aa665e8f651/packages/react-reconciler/src/ReactFiberScheduler.js#L1136)中被处理。在本篇blog中，我们默认使用同步模式。
+
+```javascript
+function workLoop(isYieldy) {
+  if (!isYieldy) {
+    // Flush work without yielding
+    while (nextUnitOfWork !== null) {
+      nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
+    }
+  } else {
+  }
+}
+```
+
+`nextUnitOfWork`会保留对`workInProgress`tree中需要处理的fiber节点的引用。当React遍历fiber tree时，会用这个变量去知晓这里是否有其他未完成工作的fiber结点。
+
+这里会有四个主要函数用于遍历fiber树及发起、完成工作：
+
+- [performUnitOfWork](https://github.com/facebook/react/blob/95a313ec0b957f71798a69d8e83408f40e76765b/packages/react-reconciler/src/ReactFiberScheduler.js#L1056)
+- [beginWork](https://github.com/facebook/react/blob/cbbc2b6c4d0d8519145560bd8183ecde55168b12/packages/react-reconciler/src/ReactFiberBeginWork.js#L1489)
+- [completeUnitOfWork](https://github.com/facebook/react/blob/95a313ec0b957f71798a69d8e83408f40e76765b/packages/react-reconciler/src/ReactFiberScheduler.js#L879)
+- [completeWork](https://github.com/facebook/react/blob/cbbc2b6c4d0d8519145560bd8183ecde55168b12/packages/react-reconciler/src/ReactFiberCompleteWork.js#L532)
+
+让我们通过下面这个简化了的gif演示他们是怎么运行的，每一个函数需要一个fiber节点作为入参。当React遍历fiber树时可以清楚地看到当前fiber节点的变动，在处理父亲节点前会先会完成孩子节点。这个图动的很快，建议仔细一步步看。
+
+>同一列是兄弟节点，向右的是孩子节点
+
+![img](/images/1*A3-yF-3Xf47nPamFpRm64w.png)
+
+
+
+#### performUnitOfWork & beginWork
+
+**performUnitOfWork**接收一个从**workInProgress tree**中的fiber节点，然后调用**beginWork**，beginWork是触发fiber节点更新的地方。
+
+```javascript
+function performUnitOfWork(workInProgress) {
+    let next = beginWork(workInProgress);
+    if (next === null) {
+        next = completeUnitOfWork(workInProgress);
+    }
+    return next;
+}
+
+```
+
+在beginWork中，主要逻辑分为判断该fiber的props和context有否发生变化，如果发生变化则标记didReceiveUpdate为true，且判断是否需要更新，如果没有更新则return。没有return则进入更新组件阶段。
+
+```javascript
+// 这里分析函数式组件的beginWork, current->当前渲染使用的fiber，workInProgress->这次更新用的fiber
+function beginWork(current, workInProgress, renderExpirationTime) {
+  const updateExpirationTime = workInProgress.expirationTime; // 还剩多少时间
+  if (current !== null) {
+    const oldProps = current.memoizedProps;
+    const newProps = workInProgress.pendingProps;
+    if (oldProps !== newProps || hasLegacyContextChanged()) {
+      //如果props或者context变化，则标记该fiber节点在之前已经更新过
+      //在memo的且memorize相同的情况下不设置
+      didReceiveUpdate = true;
+    } else if (updateExpirationTime < renderExpirationTime) {
+      didReceiveUpdate = false;
+      // 这个fiber节点没活干，所以直接跳出即可，但是在跳出前还有一些优化逻辑要处理，e.g.往栈上放必须的数据
+      // ...这里我们暂时不关心
+      return bailoutOnAlreadyFinishedWork(
+        current,
+        workInProgress,
+        renderExpirationTime,
+      );
+    }
+  } else {
+    //如果上一个状态没有fiber节点
+    didReceiveUpdate = false;
+  }
+  //清空呼气时间
+  workInProgress.expirationTime = NoWork;
+  switch (workInProgress.tag) {
+    case FunctionComponent: {
+      const Component = workInProgress.type;
+      const unresolvedProps = workInProgress.pendingProps;
+      const resolvedProps =
+        workInProgress.elementType === Component
+          ? unresolvedProps
+          : resolveDefaultProps(Component, unresolvedProps);
+      return updateFunctionComponent(
+        current,
+        workInProgress,
+        Component,
+        resolvedProps,
+        renderExpirationTime,
+      );
+    }
+
+  }
+  return workInProgress.child;
+}
+```
+
+#### updateFunctionComponent
+
+```typescript
+function updateFunctionComponent(
+  current,
+  workInProgress,
+  Component,
+  nextProps: any,
+  renderExpirationTime,
+) {
+
+  const unmaskedContext = getUnmaskedContext(workInProgress, Component, true);
+  const context = getMaskedContext(workInProgress, unmaskedContext);
+
+  let nextChildren;
+  prepareToReadContext(workInProgress, renderExpirationTime);
+
+  nextChildren = renderWithHooks(
+    current,
+    workInProgress,
+    Component,
+    nextProps,
+    context,
+    renderExpirationTime,
+  );
+// 如果上一个状态有fiber节点且没有接受到更新 如果调用了setState则会在updateReducer中
+// 调用markWorkInProgressReceivedUpdate将didReceiveUpdate置为true
+  if (current !== null && !didReceiveUpdate) {
+    // 因为要跳出这个组件的render阶段，所以清空hooks，重置workInProgress中的数据
+    bailoutHooks(current, workInProgress, renderExpirationTime);
+    return bailoutOnAlreadyFinishedWork(
+      current,
+      workInProgress,
+      renderExpirationTime,
+    );
+  }
+  reconcileChildren(
+    current,
+    workInProgress,
+    nextChildren,
+    renderExpirationTime,
+  );
+  return workInProgress.child;
+}
+```
+
+
+
+### 在renderWithHooks之后
+
+```typescript
+export function bailoutHooks(
+  current: Fiber,
+  workInProgress: Fiber,
+  expirationTime: ExpirationTime,
+) {
+  // 复用updateQueue   
+  workInProgress.updateQueue = current.updateQueue;
+  // 移除两个tag
+  workInProgress.effectTag &= ~(PassiveEffect | UpdateEffect);
+  if (current.expirationTime <= expirationTime) {
+    //移除呼气时间
+    current.expirationTime = NoWork;
+  }
+}
+```
+
+
+
+## commit阶段
+
