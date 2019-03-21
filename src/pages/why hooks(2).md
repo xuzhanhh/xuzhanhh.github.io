@@ -141,9 +141,9 @@ function updateEffectImpl(fiberEffectTag, hookEffectTag, create, deps): void {
 
 ## render阶段
 
-class组件的具体流程可以看我这篇[blog](https://xuzhanhh.com/Inside%20Fiber/)，下面开始分析functional组件，我会将设计一个分界点在renderWithHooks，这样我认为流程看起来会更加清晰
+class组件的具体流程可以看我这篇[blog](https://xuzhanhh.com/Inside%20Fiber/)，下面开始分析functional组件，我会将设计一个分界点在updateFunctionComponent，这样我认为流程看起来会更加清晰
 
-### 在renderWithHooks之前
+### 在updateFunctionComponent之前
 
 #### renderRoot & workloop
 
@@ -246,6 +246,8 @@ function beginWork(current, workInProgress, renderExpirationTime) {
 
 #### updateFunctionComponent
 
+​	在这个函数中，React会调用renderWithHooks得到当前fiber节点的结果并返回该组件的子组件。并根据didReceiveUpdate判断该组件树(该组件及其子组件)是否需要更新。如果不需要更新则在完成还原等操作后跳出(bail out)，否则进入子组件的reconcile流程(reconcileChildren)。
+
 ```typescript
 function updateFunctionComponent(
   current,
@@ -292,7 +294,15 @@ function updateFunctionComponent(
 
 
 
-### 在renderWithHooks之后
+### 在updateFunctionComponent之后
+
+#### 该组件不需要更新
+
+如果该组件不需要更新，那么就会执行以下操作后跳出：
+
+1. 清空已经入队的更新
+2. 移除PassiveEffect和UpdateEffect
+3. 移除呼气时间
 
 ```typescript
 export function bailoutHooks(
@@ -310,6 +320,77 @@ export function bailoutHooks(
   }
 }
 ```
+
+4. 复用上次context
+5. 检查子组件是否有更新，如果子组件没有更新，则可以对该组件执行completeUnitOfWork操作了
+6. 子组件有更新，通过current.child重新创建workInProgress.child并作为下一个要处理的fiber节点传出
+
+```typescript
+function bailoutOnAlreadyFinishedWork(
+  current: Fiber | null,
+  workInProgress: Fiber,
+  renderExpirationTime: ExpirationTime,
+): Fiber | null {
+  cancelWorkTimer(workInProgress);
+
+  if (current !== null) {
+    // 复用上次context
+    workInProgress.contextDependencies = current.contextDependencies;
+  }
+
+  // 检查子组件是否有更新
+  const childExpirationTime = workInProgress.childExpirationTime;
+  if (childExpirationTime < renderExpirationTime) {
+    // 如果return null，表示子组件都没更新 则可以对该组件执行completeUnitOfWork操作了
+    return null;
+  } else {
+    // 这个组件没有更新，不过他的子组件有，通过current.child重新创建workInProgress.child
+    cloneChildFibers(current, workInProgress);
+    return workInProgress.child;
+  }
+}
+```
+
+#### 该组件需要更新
+
+如果该组件需要更新，那么也要先更新完他的子组件才能complete自己呀，详情看上面👆的gif图。
+
+```typescript
+export function reconcileChildren(
+  current: Fiber | null,
+  workInProgress: Fiber,
+  nextChildren: any,
+  renderExpirationTime: ExpirationTime,
+) {
+  if (current === null) {
+    // If this is a fresh new component that hasn't been rendered yet, we
+    // won't update its child set by applying minimal side-effects. Instead,
+    // we will add them all to the child before it gets rendered. That means
+    // we can optimize this reconciliation pass by not tracking side-effects.
+    workInProgress.child = mountChildFibers(
+      workInProgress,
+      null,
+      nextChildren,
+      renderExpirationTime,
+    );
+  } else {
+    // If the current child is the same as the work in progress, it means that
+    // we haven't yet started any work on these children. Therefore, we use
+    // the clone algorithm to create a copy of all the current children.
+
+    // If we had any progressed work already, that is invalid at this point so
+    // let's throw it out.
+    workInProgress.child = reconcileChildFibers(
+      workInProgress,
+      current.child,
+      nextChildren,
+      renderExpirationTime,
+    );
+  }
+}
+```
+
+
 
 
 
