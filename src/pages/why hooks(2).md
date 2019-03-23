@@ -4,9 +4,25 @@ date: '2019-03-22'
 spoiler: 从hooks切入，深入了解React编程模型
 ---
 
+>TODO： 添加实际运行时的结构等
+
 ##  前言
 
 ​		在[上一篇文章](https://xuzhanhh.com/why%20hooks/)中，我们梳理了useState的实现逻辑，得出是如果不考虑额外的优化逻辑，useState与fiber节点唯一的联系就是hooks队列是挂在fiber上的memoizedState，当React执行到当前函数式组件时会将其按序取出并更新。那么这一次我们来到了useEffect，这次的hook是与react-reconciler有很强的联系的，所以我们可以通过这个hooks打开react-reconciler的大门。
+
+这次我们要观察的组件是👇介个，流程是当点击事件触发后(React触发组件更新)，控制台log之前React到底干了什么。
+
+```javascript
+const App2 = () => {
+    const [data, setData] = React.useState(0)
+    React.useEffect(()=>{
+        console.log('trigger effect')
+    })
+    return (<div onClick={()=>{setData(data+1)}}>{data}</div>)
+}
+```
+
+
 
 ## mountEffect & mountLayoutEffect
 
@@ -178,7 +194,7 @@ function workLoop(isYieldy) {
 
 
 
-#### performUnitOfWork & beginWork
+#### performUnitOfWork
 
 **performUnitOfWork**接收一个从**workInProgress tree**中的fiber节点，然后调用**beginWork**，beginWork是触发fiber节点更新的地方。
 
@@ -192,6 +208,8 @@ function performUnitOfWork(workInProgress) {
 }
 
 ```
+
+#### beginWork
 
 在beginWork中，主要逻辑分为判断该fiber的props和context有否发生变化，如果发生变化则标记didReceiveUpdate为true，且判断是否需要更新，如果没有更新则return。没有return则进入更新组件阶段。
 
@@ -296,7 +314,7 @@ function updateFunctionComponent(
 
 ### 在updateFunctionComponent之后
 
-#### 该组件不需要更新
+#### 该组件不需要更新(修改&新增)
 
 如果该组件不需要更新，那么就会执行以下操作后跳出：
 
@@ -351,9 +369,9 @@ function bailoutOnAlreadyFinishedWork(
 }
 ```
 
-#### 该组件需要更新
+#### 该组件需要更新(修改&新增)
 
-如果该组件需要更新，那么也要先更新完他的子组件才能complete自己呀，详情看上面👆的gif图。
+​	如果该组件需要更新，那么也要先更新完他的子组件才能complete自己呀，详情看上面👆的gif图。子组件更新的逻辑分两种，根据current=== null与否判断，具体逻辑看代码注释
 
 ```typescript
 export function reconcileChildren(
@@ -363,10 +381,7 @@ export function reconcileChildren(
   renderExpirationTime: ExpirationTime,
 ) {
   if (current === null) {
-    // If this is a fresh new component that hasn't been rendered yet, we
-    // won't update its child set by applying minimal side-effects. Instead,
-    // we will add them all to the child before it gets rendered. That means
-    // we can optimize this reconciliation pass by not tracking side-effects.
+    // 如果这个是个之前没渲染过的船新组件，React不会通过应用最小副作用去更新他的子组件，而是在父组件渲染前将子组件添加到父组件上。这样React可以通过不跟踪副作用优化协调(reconciliation)过程。
     workInProgress.child = mountChildFibers(
       workInProgress,
       null,
@@ -374,12 +389,7 @@ export function reconcileChildren(
       renderExpirationTime,
     );
   } else {
-    // If the current child is the same as the work in progress, it means that
-    // we haven't yet started any work on these children. Therefore, we use
-    // the clone algorithm to create a copy of all the current children.
-
-    // If we had any progressed work already, that is invalid at this point so
-    // let's throw it out.
+    // 如果当前(child)子组件跟正在处理(workInProgress)子组件相同，这意味着React还没开始处理子组件，因此React会复用之前的逻辑去复制一份所有当前(current)子组件的实例。如果在这个地方已经用处理过的update是非法的，丢掉这些updat
     workInProgress.child = reconcileChildFibers(
       workInProgress,
       current.child,
@@ -389,6 +399,38 @@ export function reconcileChildren(
   }
 }
 ```
+
+#### completeUnitOfWork
+
+​	**由于篇幅限制，这里暂时不介绍React更新子组件的逻辑，这点我们放到后面仔细聊，我们这次关注于这个组件的工作流程。** 那么我们假定没有子组件了，React知道已经到达分支的结尾所以他可以完成当前节点了且完成节点后React会开始其兄弟节点的工作或向父节点回溯，这部分逻辑是completeUnitOfWork中执行。
+
+```javascript
+function completeUnitOfWork(workInProgress) {
+    while (true) {
+        let returnFiber = workInProgress.return;
+        let siblingFiber = workInProgress.sibling;
+
+        nextUnitOfWork = completeWork(workInProgress);
+
+        if (siblingFiber !== null) {
+            // 如果有兄弟节点， 返回兄弟节点
+            return siblingFiber;
+        } else if (returnFiber !== null) {
+            // 父节点下已经没有需要工作的节点了，返回父节点
+            workInProgress = returnFiber;
+            continue;
+        } else {
+            // 到达根节点
+            return null;
+        }
+    }
+}
+
+```
+
+
+
+## scheduler
 
 
 
