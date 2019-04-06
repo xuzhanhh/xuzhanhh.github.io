@@ -1,4 +1,182 @@
-<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0"><channel><title><![CDATA[酱香型猫砂盆]]></title><description><![CDATA[Personal blog by Dan Abramov. I explain with words and code.]]></description><link>https://overreacted.io</link><generator>RSS for Node</generator><lastBuildDate>Sat, 23 Mar 2019 10:19:46 GMT</lastBuildDate><item><title><![CDATA[why hooks(2) — useEffect是怎么跑起来的]]></title><description><![CDATA[TODO： 添加实际运行时的结构等 前言 ​		在 上一篇文章 中，我们梳理了useState的实现逻辑，得出是如果不考虑额外的优化逻辑，useState与fiber节点唯一的联系就是hooks队列是挂在fiber上的memoizedState，当React…]]></description><link>https://overreacted.io/why hooks(2)/</link><guid isPermaLink="false">https://overreacted.io/why hooks(2)/</guid><pubDate>Fri, 22 Mar 2019 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0"><channel><title><![CDATA[酱香型猫砂盆]]></title><description><![CDATA[Personal blog by Dan Abramov. I explain with words and code.]]></description><link>https://overreacted.io</link><generator>RSS for Node</generator><lastBuildDate>Sat, 06 Apr 2019 10:39:43 GMT</lastBuildDate><item><title><![CDATA[React中的Scheduler]]></title><description><![CDATA[https://developer.mozilla.org/zh-CN/docs/Web/API/Window/requestIdleCallback https://medium.com/@paul_irish/requestanimationframe-scheduling…]]></description><link>https://overreacted.io/React中的Scheduler/</link><guid isPermaLink="false">https://overreacted.io/React中的Scheduler/</guid><pubDate>Sat, 06 Apr 2019 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;&lt;a href=&quot;https://developer.mozilla.org/zh-CN/docs/Web/API/Window/requestIdleCallback&quot;&gt;https://developer.mozilla.org/zh-CN/docs/Web/API/Window/requestIdleCallback&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;&lt;a href=&quot;https://medium.com/@paul_irish/requestanimationframe-scheduling-for-nerds-9c57f7438ef4&quot;&gt;https://medium.com/@paul_irish/requestanimationframe-scheduling-for-nerds-9c57f7438ef4&lt;/a&gt;&lt;/p&gt;
+&lt;h2&gt;React中的requestIdleCallback&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;剩下的代码是实质上是requestIdleCallback的polyfill，通过调度rAF，存储帧开始的时间，然后在绘制(paint)后安排一个postMessage请求。
+在postMessage处理逻辑中，React会在有限的时间中尽可能的多工作。
+通过将空闲调用(idle call)拆分到多次event tick，我们可以确保布局(layout), 绘制(paint)和其他浏览器工作在有效的时间中能正常的工作，而且帧率是动态调整的。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h3&gt;初始化处理&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;React会先从需要的全局引用中捕获到本地引用，以防在代码执行的后续过程中全局引用受到改动导致不一致。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;div class=&quot;gatsby-highlight&quot; data-language=&quot;javascript&quot;&gt;&lt;pre class=&quot;language-javascript&quot;&gt;&lt;code class=&quot;language-javascript&quot;&gt;&lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; localDate &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; Date&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+
+&lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; localSetTimeout &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;typeof&lt;/span&gt; setTimeout &lt;span class=&quot;token operator&quot;&gt;===&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&apos;function&apos;&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;?&lt;/span&gt; setTimeout &lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; undefined&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; localClearTimeout &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt;
+  &lt;span class=&quot;token keyword&quot;&gt;typeof&lt;/span&gt; clearTimeout &lt;span class=&quot;token operator&quot;&gt;===&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&apos;function&apos;&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;?&lt;/span&gt; clearTimeout &lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; undefined&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+
+&lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; localRequestAnimationFrame &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt;
+  &lt;span class=&quot;token keyword&quot;&gt;typeof&lt;/span&gt; requestAnimationFrame &lt;span class=&quot;token operator&quot;&gt;===&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&apos;function&apos;&lt;/span&gt;
+    &lt;span class=&quot;token operator&quot;&gt;?&lt;/span&gt; requestAnimationFrame
+    &lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; undefined&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; localCancelAnimationFrame &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt;
+  &lt;span class=&quot;token keyword&quot;&gt;typeof&lt;/span&gt; cancelAnimationFrame &lt;span class=&quot;token operator&quot;&gt;===&lt;/span&gt; &lt;span class=&quot;token string&quot;&gt;&apos;function&apos;&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;?&lt;/span&gt; cancelAnimationFrame &lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; undefined&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+
+&lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; getCurrentTime&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;blockquote&gt;
+&lt;p&gt;当页面不在前台时rAF不会运行。如果页面在后台则需要调度工作继续进行，因为页面需要继续加载。&lt;/p&gt;
+&lt;p&gt;因此React会用setTimeout继续调度作为备用。&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;div class=&quot;gatsby-highlight&quot; data-language=&quot;javascript&quot;&gt;&lt;pre class=&quot;language-javascript&quot;&gt;&lt;code class=&quot;language-javascript&quot;&gt;&lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;token constant&quot;&gt;ANIMATION_FRAME_TIMEOUT&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;100&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; rAFID&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; rAFTimeoutID&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;token function-variable function&quot;&gt;requestAnimationFrameWithTimeout&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;callback&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+  &lt;span class=&quot;token comment&quot;&gt;// 触发一个rAF和setTimeout&lt;/span&gt;
+  rAFID &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token function&quot;&gt;localRequestAnimationFrame&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token keyword&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;timestamp&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;token comment&quot;&gt;// 触发了rAF则取消setTimeout&lt;/span&gt;
+    &lt;span class=&quot;token function&quot;&gt;localClearTimeout&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;rAFTimeoutID&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;token function&quot;&gt;callback&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;timestamp&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+  &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+  rAFTimeoutID &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token function&quot;&gt;localSetTimeout&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token keyword&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;token comment&quot;&gt;// 触发了setTimeout则取消rAF&lt;/span&gt;
+    &lt;span class=&quot;token function&quot;&gt;localCancelAnimationFrame&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;rAFID&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;token function&quot;&gt;callback&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token function&quot;&gt;getCurrentTime&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+  &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; &lt;span class=&quot;token constant&quot;&gt;ANIMATION_FRAME_TIMEOUT&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+&lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;​	在初始化完成后，React会根据是否有window，messageChannel等对象判断当前运行环境，执行不同的流程。这里只看正常的浏览器环境。&lt;/p&gt;
+&lt;div class=&quot;gatsby-highlight&quot; data-language=&quot;javascript&quot;&gt;&lt;pre class=&quot;language-javascript&quot;&gt;&lt;code class=&quot;language-javascript&quot;&gt;  &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; scheduledHostCallback &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;null&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+  &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; isMessageEventScheduled &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+  &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; timeoutTime &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+
+  &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; isAnimationFrameScheduled &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+
+  &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; isFlushingHostCallback &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+
+  &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; frameDeadline &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+
+  &lt;span class=&quot;token comment&quot;&gt;// React假设从30fps开始并通过启发式的跟踪调整速度。如果有更频繁的动画帧则frameTime更少&lt;/span&gt;
+  &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; previousFrameTime &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;33&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+  &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; activeFrameTime &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;33&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+
+  &lt;span class=&quot;token function-variable function&quot;&gt;shouldYieldToHost&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;token keyword&quot;&gt;return&lt;/span&gt; frameDeadline &lt;span class=&quot;token operator&quot;&gt;&amp;lt;=&lt;/span&gt; &lt;span class=&quot;token function&quot;&gt;getCurrentTime&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+  &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+
+  &lt;span class=&quot;token comment&quot;&gt;// React使用postMessage手段去延迟空闲工作的时间在重绘(repaint)之后&lt;/span&gt;
+  &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; channel &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;token class-name&quot;&gt;MessageChannel&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+  &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; port &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; channel&lt;span class=&quot;token punctuation&quot;&gt;.&lt;/span&gt;port2&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;p&gt;为了阅读更清晰，下面的代码顺序与React源码中的不太相同。&lt;/p&gt;
+&lt;h3&gt;requestHostCallback&amp;#x26;&amp;#x26;cancelHostCallback&lt;/h3&gt;
+&lt;p&gt;rIC的polyfill中最外层的代码是&lt;strong&gt;requestHostCallback&lt;/strong&gt;和&lt;strong&gt;cancelHostCallback&lt;/strong&gt;。requestHostCallback的入参和rIC的相似，传入需要调用的函数和必须执行时间。&lt;/p&gt;
+&lt;div class=&quot;gatsby-highlight&quot; data-language=&quot;javascript&quot;&gt;&lt;pre class=&quot;language-javascript&quot;&gt;&lt;code class=&quot;language-javascript&quot;&gt;  &lt;span class=&quot;token function-variable function&quot;&gt;requestHostCallback&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;callback&lt;span class=&quot;token punctuation&quot;&gt;,&lt;/span&gt; absoluteTimeout&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+    scheduledHostCallback &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; callback&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    timeoutTime &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; absoluteTimeout&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;token keyword&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;isFlushingHostCallback &lt;span class=&quot;token operator&quot;&gt;||&lt;/span&gt; absoluteTimeout &lt;span class=&quot;token operator&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// 如果上一个callback正在执行中或者absoluteTimeout&amp;lt;0，不等待下一帧，在一个新postMessage中尽快执行&lt;/span&gt;
+      port&lt;span class=&quot;token punctuation&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;token function&quot;&gt;postMessage&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;undefined&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;else&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;!&lt;/span&gt;isAnimationFrameScheduled&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// 如果当前没有调度的rAF,调度一个&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// TODO: 如果因为浏览器节流导致rAF没有被触发，React考虑使用setTimeout触发rIC确保执行工作&lt;/span&gt;
+      isAnimationFrameScheduled &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+      &lt;span class=&quot;token function&quot;&gt;requestAnimationFrameWithTimeout&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;animationTick&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;
+  &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+
+  &lt;span class=&quot;token function-variable function&quot;&gt;cancelHostCallback&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;token comment&quot;&gt;// 清空数据&lt;/span&gt;
+    scheduledHostCallback &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;null&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    isMessageEventScheduled &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    timeoutTime &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+  &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;h3&gt;animationTick&lt;/h3&gt;
+&lt;p&gt;animationTick是React传入rAF中的回调函数&lt;/p&gt;
+&lt;div class=&quot;gatsby-highlight&quot; data-language=&quot;javascript&quot;&gt;&lt;pre class=&quot;language-javascript&quot;&gt;&lt;code class=&quot;language-javascript&quot;&gt;  &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; &lt;span class=&quot;token function-variable function&quot;&gt;animationTick&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;rafTime&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;token keyword&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;scheduledHostCallback &lt;span class=&quot;token operator&quot;&gt;!==&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;null&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// Eagerly schedule the next animation callback at the beginning of the&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// frame. If the scheduler queue is not empty at the end of the frame, it&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// will continue flushing inside that callback. If the queue *is* empty,&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// then it will exit immediately. Posting the callback at the start of the&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// frame ensures it&apos;s fired within the earliest possible frame. If we&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// waited until the end of the frame to post the callback, we risk the&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// browser skipping a frame and not firing the callback until the frame&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// after that.&lt;/span&gt;
+      &lt;span class=&quot;token function&quot;&gt;requestAnimationFrameWithTimeout&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;animationTick&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;else&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// No pending work. Exit.&lt;/span&gt;
+      isAnimationFrameScheduled &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+      &lt;span class=&quot;token keyword&quot;&gt;return&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; nextFrameTime &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; rafTime &lt;span class=&quot;token operator&quot;&gt;-&lt;/span&gt; frameDeadline &lt;span class=&quot;token operator&quot;&gt;+&lt;/span&gt; activeFrameTime&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;token keyword&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;
+      nextFrameTime &lt;span class=&quot;token operator&quot;&gt;&amp;lt;&lt;/span&gt; activeFrameTime &lt;span class=&quot;token operator&quot;&gt;&amp;amp;&amp;amp;&lt;/span&gt;
+      previousFrameTime &lt;span class=&quot;token operator&quot;&gt;&amp;lt;&lt;/span&gt; activeFrameTime
+    &lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;token keyword&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;nextFrameTime &lt;span class=&quot;token operator&quot;&gt;&amp;lt;&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;8&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;token comment&quot;&gt;// Defensive coding. We don&apos;t support higher frame rates than 120hz.&lt;/span&gt;
+        &lt;span class=&quot;token comment&quot;&gt;// If the calculated frame time gets lower than 8, it is probably a bug.&lt;/span&gt;
+        nextFrameTime &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;8&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+      &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// If one frame goes long, then the next one can be short to catch up.&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// If two frames are short in a row, then that&apos;s an indication that we&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// actually have a higher frame rate than what we&apos;re currently optimizing.&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// We adjust our heuristic dynamically accordingly. For example, if we&apos;re&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// running on 120hz display or 90hz VR display.&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// Take the max of the two in case one of them was an anomaly due to&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// missed frame deadlines.&lt;/span&gt;
+      activeFrameTime &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt;
+        nextFrameTime &lt;span class=&quot;token operator&quot;&gt;&amp;lt;&lt;/span&gt; previousFrameTime &lt;span class=&quot;token operator&quot;&gt;?&lt;/span&gt; previousFrameTime &lt;span class=&quot;token punctuation&quot;&gt;:&lt;/span&gt; nextFrameTime&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;else&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+      previousFrameTime &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; nextFrameTime&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;
+    frameDeadline &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; rafTime &lt;span class=&quot;token operator&quot;&gt;+&lt;/span&gt; activeFrameTime&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;token keyword&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;!&lt;/span&gt;isMessageEventScheduled&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+      isMessageEventScheduled &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+      port&lt;span class=&quot;token punctuation&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;token function&quot;&gt;postMessage&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;undefined&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;
+  &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;
+&lt;div class=&quot;gatsby-highlight&quot; data-language=&quot;javascript&quot;&gt;&lt;pre class=&quot;language-javascript&quot;&gt;&lt;code class=&quot;language-javascript&quot;&gt;  channel&lt;span class=&quot;token punctuation&quot;&gt;.&lt;/span&gt;port1&lt;span class=&quot;token punctuation&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;token function-variable function&quot;&gt;onmessage&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;function&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;event&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+    isMessageEventScheduled &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+
+    &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; prevScheduledCallback &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; scheduledHostCallback&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; prevTimeoutTime &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; timeoutTime&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    scheduledHostCallback &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;null&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    timeoutTime &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+
+    &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; currentTime &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token function&quot;&gt;getCurrentTime&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+
+    &lt;span class=&quot;token keyword&quot;&gt;var&lt;/span&gt; didTimeout &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;token keyword&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;frameDeadline &lt;span class=&quot;token operator&quot;&gt;-&lt;/span&gt; currentTime &lt;span class=&quot;token operator&quot;&gt;&amp;lt;=&lt;/span&gt; &lt;span class=&quot;token number&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// There&apos;s no time left in this idle period. Check if the callback has&lt;/span&gt;
+      &lt;span class=&quot;token comment&quot;&gt;// a timeout and whether it&apos;s been exceeded.&lt;/span&gt;
+      &lt;span class=&quot;token keyword&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;prevTimeoutTime &lt;span class=&quot;token operator&quot;&gt;!==&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;-&lt;/span&gt;&lt;span class=&quot;token number&quot;&gt;1&lt;/span&gt; &lt;span class=&quot;token operator&quot;&gt;&amp;amp;&amp;amp;&lt;/span&gt; prevTimeoutTime &lt;span class=&quot;token operator&quot;&gt;&amp;lt;=&lt;/span&gt; currentTime&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;token comment&quot;&gt;// Exceeded the timeout. Invoke the callback even though there&apos;s no&lt;/span&gt;
+        &lt;span class=&quot;token comment&quot;&gt;// time left.&lt;/span&gt;
+        didTimeout &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+      &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;else&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;token comment&quot;&gt;// No timeout.&lt;/span&gt;
+        &lt;span class=&quot;token keyword&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;token operator&quot;&gt;!&lt;/span&gt;isAnimationFrameScheduled&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+          &lt;span class=&quot;token comment&quot;&gt;// Schedule another animation callback so we retry later.&lt;/span&gt;
+          isAnimationFrameScheduled &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+          &lt;span class=&quot;token function&quot;&gt;requestAnimationFrameWithTimeout&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;animationTick&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;
+        &lt;span class=&quot;token comment&quot;&gt;// Exit without invoking the callback.&lt;/span&gt;
+        scheduledHostCallback &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; prevScheduledCallback&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+        timeoutTime &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; prevTimeoutTime&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+        &lt;span class=&quot;token keyword&quot;&gt;return&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+      &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;
+    &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;
+
+    &lt;span class=&quot;token keyword&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;prevScheduledCallback &lt;span class=&quot;token operator&quot;&gt;!==&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;null&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+      isFlushingHostCallback &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;true&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+      &lt;span class=&quot;token keyword&quot;&gt;try&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+        &lt;span class=&quot;token function&quot;&gt;prevScheduledCallback&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;(&lt;/span&gt;didTimeout&lt;span class=&quot;token punctuation&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+      &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt; &lt;span class=&quot;token keyword&quot;&gt;finally&lt;/span&gt; &lt;span class=&quot;token punctuation&quot;&gt;{&lt;/span&gt;
+        isFlushingHostCallback &lt;span class=&quot;token operator&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;token boolean&quot;&gt;false&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;
+      &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;
+    &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;
+  &lt;span class=&quot;token punctuation&quot;&gt;}&lt;/span&gt;&lt;span class=&quot;token punctuation&quot;&gt;;&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;</content:encoded></item><item><title><![CDATA[why hooks(2) — useEffect是怎么跑起来的]]></title><description><![CDATA[TODO： 添加实际运行时的结构等 前言 ​		在 上一篇文章 中，我们梳理了useState的实现逻辑，得出是如果不考虑额外的优化逻辑，useState与fiber节点唯一的联系就是hooks队列是挂在fiber上的memoizedState，当React…]]></description><link>https://overreacted.io/why hooks(2)/</link><guid isPermaLink="false">https://overreacted.io/why hooks(2)/</guid><pubDate>Fri, 22 Mar 2019 00:00:00 GMT</pubDate><content:encoded>&lt;blockquote&gt;
 &lt;p&gt;TODO： 添加实际运行时的结构等&lt;/p&gt;
 &lt;/blockquote&gt;
 &lt;h2&gt;前言&lt;/h2&gt;
