@@ -10,18 +10,18 @@ spoiler: 并行模式没什么难的，我们从Scheduler开始学起。
 
 ### 1. 所有rAF回调始终在相同或下一个帧中运行
 
-在事件处理程序中排队的任何rAF都将在同一帧中执行。 在rAF中排队的任何rAF将在下一帧中执行。
+&nbsp;&nbsp;&nbsp;&nbsp;在事件处理程序中排队的任何rAF都将在同一帧中执行。 在rAF中排队的任何rAF将在下一帧中执行。
 
 ### 2. 每一个你触发的rAF都会运行
 
-尽管执行时间很长，rAF也不会受到限制。例如队列中有五个rAF回调，每个都会占用100ms时间。浏览器依然不会分发他们到每一帧中，而是在同一帧中执行，尽管它会占用500ms时间。这会造成一个严重的阻塞。
+&nbsp;&nbsp;&nbsp;&nbsp;尽管执行时间很长，rAF也不会受到限制。例如队列中有五个rAF回调，每个都会占用100ms时间。浏览器依然不会分发他们到每一帧中，而是在同一帧中执行，尽管它会占用500ms时间。这会造成一个严重的阻塞。
 
 以下两种情况就会触发这个问题：
 
-1. 在一个rAF结尾请求一个新的callback
-2. 你在一个input时间处理器中调用rAF，这样可能在一帧中调用多次。
+&nbsp;&nbsp;&nbsp;&nbsp;1. 在一个rAF结尾请求一个新的callback
+&nbsp;&nbsp;&nbsp;&nbsp;2. 你在一个input时间处理器中调用rAF，这样可能在一帧中调用多次。
 
-**你可以自己合并rAF**。因此：如果在同一帧内有多个“相同”回调触发，则必须管理调度/合并。也就是说，Chrome等浏览区会尝试解决这个问题。如果rAF正在占用主线程，浏览器将开始限制输入事件，以便希望争用将被清除。
+&nbsp;&nbsp;&nbsp;&nbsp;**你可以自己合并rAF**。因此：如果在同一帧内有多个“相同”回调触发，则必须管理调度/合并。也就是说，Chrome等浏览区会尝试解决这个问题。如果rAF正在占用主线程，浏览器将开始限制输入事件，以便希望争用将被清除。
 
 ## 一帧里浏览器会做什么
 
@@ -35,17 +35,17 @@ spoiler: 并行模式没什么难的，我们从Scheduler开始学起。
 
 w3c对requestIdelCallback的非规范定义如下:
 
-在输入处理，给定帧的渲染和合成完成之后，用户代理的主线程经常变为空闲，直到下一帧开始;另一个待处理的任务有资格运行;或收到用户输入。此规范提供了一种通过requestIdleCallback API在此空闲时间内调度回调执行的方法。通过requestIdleCallback API发布的回调有资格在用户代理定义的空闲时段内运行。
+&nbsp;&nbsp;&nbsp;&nbsp;在输入处理，给定帧的渲染和合成完成之后，用户代理的主线程经常变为空闲，直到下一帧开始;另一个待处理的任务有资格运行;或收到用户输入。此规范提供了一种通过requestIdleCallback API在此空闲时间内调度回调执行的方法。通过requestIdleCallback API发布的回调有资格在用户代理定义的空闲时段内运行。
 
-当执行空闲回调时，将给出对应于当前空闲时段结束的截止时间。关于什么构成空闲时段的决定是用户代理定义的，但是期望它们发生在浏览器期望空闲的静止时段中。
+&nbsp;&nbsp;&nbsp;&nbsp;当执行空闲回调时，将给出对应于当前空闲时段结束的截止时间。关于什么构成空闲时段的决定是用户代理定义的，但是期望它们发生在浏览器期望空闲的静止时段中。
 
-空闲时段的一个示例是在给定帧提交到屏幕和在活动动画期间开始下一帧处理之间的时间，如图1所示。这些空闲时段将在活动动画和屏幕更新期间频繁发生，但通常会非常短（即，对于具有60Hz vsync周期的设备，小于16ms）。
+&nbsp;&nbsp;&nbsp;&nbsp;空闲时段的一个示例是在给定帧提交到屏幕和在活动动画期间开始下一帧处理之间的时间，如图1所示。这些空闲时段将在活动动画和屏幕更新期间频繁发生，但通常会非常短（即，对于具有60Hz vsync周期的设备，小于16ms）。
 
 ![Example of an inter-frame idle period.](/images/image01.png)
 
-空闲时段的另一个示例是当用户代理空闲而没有发生屏幕更新时。 在这种情况下，用户代理可能没有即将到来的任务，它可以限制空闲时段的结束。
+&nbsp;&nbsp;&nbsp;&nbsp;空闲时段的另一个示例是当用户代理空闲而没有发生屏幕更新时。 在这种情况下，用户代理可能没有即将到来的任务，它可以限制空闲时段的结束。
 
- 为了避免在不可预测的任务中引起用户可察觉的延迟，例如用户输入的处理，这些空闲时段的长度应该被限制为最大值50ms。 一旦空闲时段结束，用户代理可以调度另一个空闲时段，如果它保持空闲，如图2所示，以使后台工作能够在更长的空闲时间段内继续发生。
+ &nbsp;&nbsp;&nbsp;&nbsp;为了避免在不可预测的任务中引起用户可察觉的延迟，例如用户输入的处理，这些空闲时段的长度应该被限制为最大值50ms。 一旦空闲时段结束，用户代理可以调度另一个空闲时段，如果它保持空闲，如图2所示，以使后台工作能够在更长的空闲时间段内继续发生。
 
 ![Example of an idle period when there are no pending frame updates.](/images/image00.png)
 
@@ -102,7 +102,7 @@ var requestAnimationFrameWithTimeout = function (callback) {
 };
 ```
 
-​	在初始化完成后，React会根据是否有window，messageChannel等对象判断当前运行环境，执行不同的流程。这里只看正常的浏览器环境。
+&nbsp;&nbsp;&nbsp;&nbsp;在初始化完成后，React会根据是否有window，messageChannel等对象判断当前运行环境，执行不同的流程。这里只看正常的浏览器环境。
 
 ```javascript
 
@@ -129,11 +129,11 @@ var requestAnimationFrameWithTimeout = function (callback) {
   var port = channel.port2;
 ```
 
-为了阅读更清晰，下面的代码顺序与React源码中的不太相同。
+&nbsp;&nbsp;&nbsp;&nbsp;为了阅读更清晰，下面的代码顺序与React源码中的不太相同。
 
 ### requestHostCallback&&cancelHostCallback
 
-rIC的polyfill中最外层的代码是**requestHostCallback**和**cancelHostCallback**。requestHostCallback的入参和rIC的相似，传入需要调用的函数和必须执行时间。
+&nbsp;&nbsp;&nbsp;&nbsp;rIC的polyfill中最外层的代码是**requestHostCallback**和**cancelHostCallback**。requestHostCallback的入参和rIC的相似，传入需要调用的函数和必须执行时间。
 
 ```javascript
   requestHostCallback = function (callback, absoluteTimeout) {
@@ -160,7 +160,7 @@ rIC的polyfill中最外层的代码是**requestHostCallback**和**cancelHostCall
 
 ### animationTick
 
-animationTick是React传入rAF中的回调函数
+&nbsp;&nbsp;&nbsp;&nbsp;animationTick是React传入rAF中的回调函数
 
 ```javascript
   var animationTick = function (rafTime) {
@@ -204,7 +204,7 @@ animationTick是React传入rAF中的回调函数
 
 ### onmessage(rIC的callback)
 
-​	主要流程为检查当前帧还是否够时间触发callback，够就调用，不够就调用rAF等待下一帧
+&nbsp;&nbsp;&nbsp;&nbsp;主要流程为检查当前帧还是否够时间触发callback，够就调用，不够就调用rAF等待下一帧
 
 ```javascript
   channel.port1.onmessage = function (event) {
@@ -250,7 +250,7 @@ animationTick是React传入rAF中的回调函数
 
 ## 结尾语
 
-​	本文到这里就先结束了，在这篇blog中，我们学习rAF的调度方式、一帧里浏览器会做什么、如何定义rIC以及React是怎么实现rIC的，主要是通过rAF+postmessage实现的。但是我们还没接触到React的并行模式是怎么调用rIC的，这个请期待本系列的下一篇blog。
+&nbsp;&nbsp;&nbsp;&nbsp;本文到这里就先结束了，在这篇blog中，我们学习rAF的调度方式、一帧里浏览器会做什么、如何定义rIC以及React是怎么实现rIC的，主要是通过rAF+postmessage实现的。但是我们还没接触到React的并行模式是怎么调用rIC的，这个请期待本系列的下一篇blog。
 
 
 
